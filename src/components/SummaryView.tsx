@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { FeedbackItem, FeedbackSummaryResult } from '../types';
 import { ClearErrorBanner } from './ClearErrorBanner';
+import { apiClient } from '../utils/apiClient';
 
 interface SummaryViewProps {
   feedbackList: FeedbackItem[];
@@ -42,23 +43,12 @@ export const SummaryView: React.FC<SummaryViewProps> = ({ feedbackList }) => {
     setErrorCode(undefined);
 
     try {
-      const response = await fetch('/api/generate-summary', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ feedbackItems: feedbackList }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrorCode(data.code || 'ERR_SUMMARY_FAILED');
-        throw new Error(data.error || 'Server error while generating summary.');
-      }
-
+      const data = await apiClient.generateSummary(feedbackList);
       setSummary(data);
     } catch (err: any) {
       console.error('Summary error:', err);
       setErrorMessage(err.message || 'Failed to generate AI summary.');
+      setErrorCode('ERR_SUMMARY_FAILED');
     } finally {
       setIsLoading(false);
     }

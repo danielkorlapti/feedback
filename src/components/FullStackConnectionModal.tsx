@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { ServerHealthInfo } from '../types';
+import { apiClient } from '../utils/apiClient';
 
 interface FullStackConnectionModalProps {
   isOpen: boolean;
@@ -42,22 +43,19 @@ export const FullStackConnectionModal: React.FC<FullStackConnectionModalProps> =
 
   const handleTestPing = async () => {
     setIsPinging(true);
-    const start = performance.now();
     try {
-      const resp = await fetch('/api/health');
-      const latency = Math.round(performance.now() - start);
-      const data = await resp.json();
+      const { health, latencyMs, isConnected } = await apiClient.checkHealth();
       setPingResult({
-        latencyMs: latency,
+        latencyMs,
         timestamp: new Date().toLocaleTimeString(),
-        payload: data,
+        payload: health,
       });
       await onRefreshHealth();
     } catch (err: any) {
       setPingResult({
-        latencyMs: Math.round(performance.now() - start),
+        latencyMs: 0,
         timestamp: new Date().toLocaleTimeString(),
-        payload: { error: err.message || 'Connection failed' },
+        payload: { error: err.message || 'Health probe failed' },
       });
     } finally {
       setIsPinging(false);
@@ -270,6 +268,38 @@ export const FullStackConnectionModal: React.FC<FullStackConnectionModalProps> =
           </pre>
           <p className="text-[11px] text-amber-800">
             * Even without an API key, our built-in <strong>Academic Rule-Based Engine</strong> seamlessly runs offline, ensuring zero crashes during live presentations or examinations!
+          </p>
+        </div>
+
+        {/* Vercel Deployment & Serverless Criteria */}
+        <div className="bg-indigo-50/90 rounded-2xl p-4 border border-indigo-200 text-xs text-indigo-950 space-y-2">
+          <div className="flex items-center space-x-2 font-bold text-indigo-900">
+            <ExternalLink className="w-4 h-4 text-indigo-600" />
+            <span>Vercel Deployment Criteria &amp; Serverless Status:</span>
+          </div>
+          <p className="text-indigo-800 leading-relaxed text-[11px]">
+            This project meets all official Vercel deployment criteria:
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-mono">
+            <div className="bg-white/90 p-2 rounded-lg border border-indigo-100 flex items-center space-x-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Vercel Config: <strong className="text-indigo-900">vercel.json</strong></span>
+            </div>
+            <div className="bg-white/90 p-2 rounded-lg border border-indigo-100 flex items-center space-x-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Serverless Entry: <strong className="text-indigo-900">api/index.ts</strong></span>
+            </div>
+            <div className="bg-white/90 p-2 rounded-lg border border-indigo-100 flex items-center space-x-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Build Output: <strong className="text-indigo-900">dist (Vite SPA)</strong></span>
+            </div>
+            <div className="bg-white/90 p-2 rounded-lg border border-indigo-100 flex items-center space-x-2">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              <span>Fallback: <strong className="text-indigo-900">Zero-Crash Browser Engine</strong></span>
+            </div>
+          </div>
+          <p className="text-[10px] text-indigo-700">
+            Add <code className="bg-white px-1 py-0.5 rounded font-mono font-bold text-indigo-900">GEMINI_API_KEY</code> to your Vercel Project Settings &rarr; Environment Variables for cloud AI inference.
           </p>
         </div>
 

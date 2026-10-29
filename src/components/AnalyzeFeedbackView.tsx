@@ -21,6 +21,7 @@ import { FeedbackItem, SentimentType, FeedbackPatternType } from '../types';
 import { PRESET_INPUT_SAMPLES, INDIAN_BRANCHES } from '../data/mockData';
 import { ClearErrorBanner } from './ClearErrorBanner';
 import { PatternFollowUpCard } from './PatternFollowUpCard';
+import { apiClient } from '../utils/apiClient';
 
 interface AnalyzeFeedbackViewProps {
   onFeedbackAnalyzed: (item: FeedbackItem) => void;
@@ -82,26 +83,13 @@ export const AnalyzeFeedbackView: React.FC<AnalyzeFeedbackViewProps> = ({
     setSavedSuccess(false);
 
     try {
-      setLoadingStep('Connecting to Full-Stack REST API (/api/analyze-sentiment)...');
-      const response = await fetch('/api/analyze-sentiment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: trimmed,
-          department: department.trim() || undefined,
-          facultyOrSubject: facultyOrSubject.trim() || undefined,
-          semester: semester.trim() || undefined,
-        }),
-      });
-
-      setLoadingStep('Synthesizing Sentiment, Academic Pattern & ATR Roadmap...');
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrorCode(data.code || 'ERR_API_FAILURE');
-        setErrorSuggestion(data.suggestion);
-        throw new Error(data.error || 'Server error while analyzing feedback.');
-      }
+      setLoadingStep('Connecting to Full-Stack REST API & Synthesizing Analysis...');
+      const data = await apiClient.analyzeFeedback(
+        trimmed,
+        department.trim() || undefined,
+        facultyOrSubject.trim() || undefined,
+        semester.trim() || undefined
+      );
 
       const newItem: FeedbackItem = {
         id: 'fb-' + Date.now(),
@@ -139,7 +127,9 @@ export const AnalyzeFeedbackView: React.FC<AnalyzeFeedbackViewProps> = ({
       setSavedSuccess(true);
     } catch (err: any) {
       console.error('Analysis error:', err);
-      setErrorMessage(err.message || 'Failed to communicate with AI analysis server.');
+      setErrorMessage(err.message || 'Failed to complete feedback analysis.');
+      setErrorCode('ERR_ANALYSIS_FAILED');
+      setErrorSuggestion('Try submitting again or select one of the Indian engineering preset examples.');
     } finally {
       setIsLoading(false);
       setLoadingStep('');

@@ -11,6 +11,8 @@ import { FeedbackItem, ServerHealthInfo } from './types';
 import { INITIAL_SAMPLE_FEEDBACK } from './data/mockData';
 import { GraduationCap, Server, Activity, RefreshCw } from 'lucide-react';
 
+import { apiClient } from './utils/apiClient';
+
 const STORAGE_KEY = 'indian_college_student_feedback_sentiment_v2';
 
 export default function App() {
@@ -24,19 +26,9 @@ export default function App() {
   // Check health and ping server
   const checkServerHealth = useCallback(async () => {
     try {
-      const start = performance.now();
-      const res = await fetch('/api/health');
-      const latency = Math.round(performance.now() - start);
-      if (res.ok) {
-        const data = await res.json();
-        setServerHealth({
-          ...data,
-          latencyMs: latency,
-        });
-        setIsBackendConnected(true);
-      } else {
-        setIsBackendConnected(false);
-      }
+      const res = await apiClient.checkHealth();
+      setServerHealth(res.health);
+      setIsBackendConnected(res.isConnected);
     } catch {
       setIsBackendConnected(false);
     }
@@ -49,38 +41,15 @@ export default function App() {
       await checkServerHealth();
 
       try {
-        const response = await fetch('/api/feedbacks');
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data.feedbacks) && data.feedbacks.length > 0) {
-            setFeedbackList(data.feedbacks);
-            setIsBackendConnected(true);
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(data.feedbacks));
-            } catch (e) {
-              console.warn(e);
-            }
-            return;
-          }
+        const { items, source } = await apiClient.fetchFeedbacks();
+        setFeedbackList(items);
+        if (source === 'backend') {
+          setIsBackendConnected(true);
         }
       } catch (err) {
-        console.warn('Backend fetch failed, falling back to localStorage:', err);
-        setIsBackendConnected(false);
+        console.warn('Initial load fallback active:', err);
       } finally {
         setIsSyncing(false);
-      }
-
-      // Fallback to localStorage
-      try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setFeedbackList(parsed);
-          }
-        }
-      } catch (e) {
-        console.warn('LocalStorage parse error:', e);
       }
     }
 
@@ -98,19 +67,14 @@ export default function App() {
       console.warn(e);
     }
 
-    // Persist to Express backend
+    // Persist via apiClient (REST or local fallback)
     try {
-      const resp = await fetch('/api/feedbacks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newItem),
-      });
-      if (resp.ok) {
+      const success = await apiClient.saveFeedback(newItem);
+      if (success) {
         setIsBackendConnected(true);
       }
     } catch (err) {
-      console.error('Failed to save to backend REST API:', err);
-      setIsBackendConnected(false);
+      console.warn('Saved locally, backend sync will retry:', err);
     }
   };
 
@@ -118,7 +82,9 @@ export default function App() {
   const handleDeleteFeedback = async (id: string) => {
     setFeedbackList((prev) => prev.filter((item) => item.id !== id));
     try {
-      await fetch(`/api/feedbacks/${id}`, { method: 'DELETE' });
+      await apiClient.deleteFeedback(id);
+      const updated = feedbackList.filter((item) => item.id !== id);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     } catch (err) {
       console.warn('Delete on backend failed:', err);
     }
@@ -129,8 +95,7 @@ export default function App() {
     if (window.confirm('Are you sure you want to clear all student feedback records?')) {
       setFeedbackList([]);
       try {
-        await fetch('/api/feedbacks/clear', { method: 'POST' });
-        localStorage.removeItem(STORAGE_KEY);
+        await apiClient.clearFeedbacks();
       } catch (err) {
         console.warn('Clear backend failed:', err);
       }
@@ -141,22 +106,15 @@ export default function App() {
   const handleResetSamples = async () => {
     setIsSyncing(true);
     try {
-      const res = await fetch('/api/feedbacks/reset', { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        setFeedbackList(data.feedbacks);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.feedbacks));
-        setIsBackendConnected(true);
-        return;
-      }
+      const items = await apiClient.resetFeedbacks();
+      setFeedbackList(items);
+      setIsBackendConnected(true);
     } catch (err) {
       console.warn('Reset backend failed, resetting locally:', err);
+      setFeedbackList(INITIAL_SAMPLE_FEEDBACK);
     } finally {
       setIsSyncing(false);
     }
-
-    setFeedbackList(INITIAL_SAMPLE_FEEDBACK);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_SAMPLE_FEEDBACK));
   };
 
   return (

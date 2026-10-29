@@ -14,6 +14,7 @@ import {
 import { EvaluationItem, EvaluationSummary } from '../types';
 import { BENCHMARK_TEST_DATASET } from '../data/mockData';
 import { ClearErrorBanner } from './ClearErrorBanner';
+import { apiClient } from '../utils/apiClient';
 
 export const EvaluationView: React.FC = () => {
   const [testDataset, setTestDataset] = useState<EvaluationItem[]>(BENCHMARK_TEST_DATASET);
@@ -22,25 +23,14 @@ export const EvaluationView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [errorCode, setErrorCode] = useState<string | undefined>(undefined);
 
-  // Run benchmark test suite through backend
+  // Run benchmark test suite through backend (or resilient client engine fallback)
   const handleRunEvaluation = async () => {
     setIsRunning(true);
     setErrorMessage(null);
     setErrorCode(undefined);
 
     try {
-      const response = await fetch('/api/evaluate-benchmark', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ testEntries: testDataset }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrorCode(data.code || 'ERR_BENCHMARK_FAILED');
-        throw new Error(data.error || 'Failed to complete benchmark evaluation.');
-      }
+      const data = await apiClient.evaluateBenchmark(testDataset);
 
       setTestDataset(data.items);
       setEvaluationSummary({
@@ -53,6 +43,7 @@ export const EvaluationView: React.FC = () => {
     } catch (err: any) {
       console.error('Benchmark error:', err);
       setErrorMessage(err.message || 'Error occurred while running evaluation benchmark.');
+      setErrorCode('ERR_BENCHMARK_FAILED');
     } finally {
       setIsRunning(false);
     }

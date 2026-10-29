@@ -16,6 +16,17 @@ const serverStartTime = Date.now();
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 
+// CORS headers for local, Vercel preview, and production domains
+app.use((_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (_req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Initialize Google Gemini SDK
 const apiKey = process.env.GEMINI_API_KEY || '';
 const ai = apiKey
@@ -538,7 +549,7 @@ function analyzeFeedbackWithRules(
 }
 
 // REST ENDPOINT: SYSTEM HEALTH & FULL-STACK CONNECTION
-app.get('/api/health', (_req: Request, res: Response) => {
+app.get(['/api/health', '/health'], (_req: Request, res: Response) => {
   const uptimeSeconds = Math.floor((Date.now() - serverStartTime) / 1000);
   return res.json({
     status: 'ok',
@@ -561,7 +572,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 });
 
 // REST ENDPOINT: GET ALL FEEDBACKS
-app.get('/api/feedbacks', (_req: Request, res: Response) => {
+app.get(['/api/feedbacks', '/feedbacks'], (_req: Request, res: Response) => {
   return res.json({
     status: 'success',
     total: backendFeedbackStore.length,
@@ -570,7 +581,7 @@ app.get('/api/feedbacks', (_req: Request, res: Response) => {
 });
 
 // REST ENDPOINT: SAVE NEW FEEDBACK TO BACKEND STORE
-app.post('/api/feedbacks', (req: Request, res: Response) => {
+app.post(['/api/feedbacks', '/feedbacks'], (req: Request, res: Response) => {
   const item = req.body;
   if (!item || !item.text) {
     return res.status(400).json({
@@ -591,7 +602,7 @@ app.post('/api/feedbacks', (req: Request, res: Response) => {
 });
 
 // REST ENDPOINT: DELETE FEEDBACK
-app.delete('/api/feedbacks/:id', (req: Request, res: Response) => {
+app.delete(['/api/feedbacks/:id', '/feedbacks/:id'], (req: Request, res: Response) => {
   const { id } = req.params;
   const initialLength = backendFeedbackStore.length;
   backendFeedbackStore = backendFeedbackStore.filter((f) => f.id !== id);
@@ -604,19 +615,19 @@ app.delete('/api/feedbacks/:id', (req: Request, res: Response) => {
 });
 
 // REST ENDPOINT: RESET FEEDBACKS TO INDIAN CLASSROOM SEED
-app.post('/api/feedbacks/reset', (_req: Request, res: Response) => {
+app.post(['/api/feedbacks/reset', '/feedbacks/reset'], (_req: Request, res: Response) => {
   backendFeedbackStore = [...SEED_FEEDBACKS];
   return res.json({ status: 'success', total: backendFeedbackStore.length, feedbacks: backendFeedbackStore });
 });
 
 // REST ENDPOINT: CLEAR ALL FEEDBACKS
-app.post('/api/feedbacks/clear', (_req: Request, res: Response) => {
+app.post(['/api/feedbacks/clear', '/feedbacks/clear'], (_req: Request, res: Response) => {
   backendFeedbackStore = [];
   return res.json({ status: 'success', total: 0, feedbacks: [] });
 });
 
 // REST ENDPOINT: ANALYZE SENTIMENT (Indian Engineering Classroom Context)
-app.post('/api/analyze-sentiment', async (req: Request, res: Response) => {
+app.post(['/api/analyze-sentiment', '/analyze-sentiment'], async (req: Request, res: Response) => {
   const startTime = Date.now();
   try {
     const { text, department, facultyOrSubject, semester } = req.body;
@@ -777,7 +788,7 @@ Analyze and return the structured JSON classification.`;
 });
 
 // REST ENDPOINT: GENERATE SUMMARY
-app.post('/api/generate-summary', async (req: Request, res: Response) => {
+app.post(['/api/generate-summary', '/generate-summary'], async (req: Request, res: Response) => {
   try {
     const feedbackItems = req.body.feedbackItems || backendFeedbackStore;
 
@@ -952,7 +963,7 @@ Provide a structured JSON output with:
 });
 
 // REST ENDPOINT: EVALUATE BENCHMARK
-app.post('/api/evaluate-benchmark', async (req: Request, res: Response) => {
+app.post(['/api/evaluate-benchmark', '/evaluate-benchmark'], async (req: Request, res: Response) => {
   try {
     const { testEntries } = req.body;
     if (!Array.isArray(testEntries) || testEntries.length === 0) {
@@ -1084,4 +1095,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only launch standalone web server if not executing as a Vercel Serverless Function
+if (!process.env.VERCEL) {
+  startServer();
+}
+
+export default app;
+export { app };
